@@ -33,6 +33,7 @@ def main(page: ft.Page):
     lista_procesos_ui = ft.Column(spacing=5, scroll=ft.ScrollMode.AUTO,expand=True)
     resultados_texto = ft.Text(size=18, weight="bold", color="white70")
     gantt_container = ft.Column(spacing=2)
+    tabla_comparativa_container = ft.Column()
 
     # --- FUNCIÓN: CAJA DE MENSAJE EMERGENTE ---
     def mostrar_mensaje(mensaje):
@@ -95,6 +96,7 @@ def main(page: ft.Page):
             quantum = int(val_quantum)
 
         gantt_container.controls.clear()
+        tabla_comparativa_container.controls.clear()
         
         procesos_limpios = []
         for d in datos_crudos:
@@ -177,12 +179,45 @@ def main(page: ft.Page):
             ])
             gantt_container.controls.append(fila_proceso)
         
+
+        def obtener_copias():
+            return [algoritmos.Proceso(d["pid"], d["llegada"], d["rafaga"], d["prioridad"]) for d in datos_crudos]
+
+        quantum_tabla = quantum if quantum > 0 else 2 # Usa el quantum ingresado, o 2 por defecto si eligió FIFO
+        nombres_algs = ["FIFO", "SJF", "Prioridad", "RR-FIFO", "RR-SJF", "RR-PRIO"]
+        filas_wt = [ft.DataCell(ft.Text("Espera", weight="bold"))]
+        filas_tat = [ft.DataCell(ft.Text("Sistema", weight="bold"))]
+
+        for nombre in nombres_algs:
+            procs = obtener_copias()
+            if nombre == "FIFO": r, _ = algoritmos.simular_fifo(procs)
+            elif nombre == "SJF": r, _ = algoritmos.simular_sjf(procs)
+            elif nombre == "Prioridad": r, _ = algoritmos.simular_prioridad(procs)
+            elif nombre == "RR-FIFO": r, _ = algoritmos.simular_round_robin(procs, quantum_tabla, "FIFO")
+            elif nombre == "RR-SJF": r, _ = algoritmos.simular_round_robin(procs, quantum_tabla, "SJF")
+            elif nombre == "RR-PRIO": r, _ = algoritmos.simular_round_robin(procs, quantum_tabla, "Prioridad")
+
+            wt_promedio = sum([p.tiempo_espera for p in r]) / n
+            tat_promedio = sum([p.tiempo_sistema for p in r]) / n
+            filas_wt.append(ft.DataCell(ft.Text(f"{wt_promedio:.2f}")))
+            filas_tat.append(ft.DataCell(ft.Text(f"{tat_promedio:.2f}")))
+
+        tabla = ft.DataTable(
+            columns=[ft.DataColumn(ft.Text("Métrica", weight="bold", color="blue400"))] + 
+                    [ft.DataColumn(ft.Text(alg, weight="bold")) for alg in nombres_algs],
+            rows=[ft.DataRow(cells=filas_wt), ft.DataRow(cells=filas_tat)],
+            border=ft.Border.all(1, "white24"), border_radius=10
+        )
+        tabla_comparativa_container.controls.append(ft.Row([tabla], scroll=ft.ScrollMode.AUTO))
+
         page.update()
+
 
     def limpiar_datos(e):
         datos_crudos.clear()
         lista_procesos_ui.controls.clear()
         gantt_container.controls.clear()
+        tabla_comparativa_container.controls.clear()
         resultados_texto.value = ""
         llegada_input.value = ""
         rafaga_input.value = ""
@@ -197,6 +232,7 @@ def main(page: ft.Page):
         datos_crudos.pop()
         lista_procesos_ui.controls.pop()
         gantt_container.controls.clear()
+        tabla_comparativa_container.controls.clear()
         resultados_texto.value = ""
         page.update()
 
@@ -256,7 +292,11 @@ def main(page: ft.Page):
             resultados_texto,
             ft.Text("Diagrama de Gantt", size=22, weight="bold", color="purple400"),
             ft.Divider(height=10, color="transparent"),
-            ft.Row([gantt_container], scroll=ft.ScrollMode.AUTO)
+            ft.Row([gantt_container], scroll=ft.ScrollMode.AUTO),
+
+            ft.Divider(height=20, color="transparent"),
+            ft.Text("Tabla Comparativa Global:", size=22, weight="bold", color="blue400"),
+            tabla_comparativa_container
             
         ]),
         
